@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AGRIOS Boundary Loop Report — Allerton, Iowa</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background: #0F1419; color: #E7E9EA; }
+  
+  #header {
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid #2F3336;
+    background: #16181C;
+  }
+  #header .tag { font-size: 11px; letter-spacing: 0.1em; color: #71767B; font-weight: 600; }
+  #header h1 { font-size: 18px; font-weight: 600; margin: 6px 0 2px; }
+  #header .sub { font-size: 12px; color: #71767B; }
+
+  #controls {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid #2F3336;
+    background: #16181C;
+    overflow-x: auto;
+  }
+  .pass-btn {
+    padding: 10px 16px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: #71767B;
+    font-size: 13px;
+    cursor: pointer;
+    white-space: nowrap;
+    font-family: inherit;
+  }
+  .pass-btn.active {
+    color: #E7E9EA;
+    border-bottom-color: #1D9BF0;
+    font-weight: 600;
+  }
+  .pass-btn:hover { color: #A0A4A8; }
+  .sensor-btn { margin-left: auto; }
+  .sensor-btn.active { border-bottom-color: #2563EB; color: #2563EB; }
+
+  #map-container { position: relative; }
+  #map { height: calc(100vh - 200px); min-height: 400px; width: 100%; }
+  
+  #info-panel {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 300px;
+    max-height: calc(100% - 24px);
+    background: rgba(15, 20, 25, 0.93);
+    border: 1px solid #2F3336;
+    border-radius: 10px;
+    padding: 16px;
+    z-index: 1000;
+    overflow-y: auto;
+    backdrop-filter: blur(8px);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  #info-panel .priority-tag {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    margin-bottom: 4px;
+  }
+  #info-panel h3 { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+  #info-panel p { color: #A0A4A8; margin-bottom: 10px; }
+  #info-panel .detail { font-size: 11px; color: #71767B; border-top: 1px solid #2F3336; padding-top: 8px; margin-top: 4px; }
+  #info-panel .pass2-insight {
+    font-size: 11px; color: #1D9BF0; background: rgba(29,155,240,0.06);
+    border-radius: 6px; padding: 8px 10px; margin-top: 8px; line-height: 1.5;
+  }
+
+  #pass-description {
+    padding: 12px 20px;
+    background: #16181C;
+    border-bottom: 1px solid #2F3336;
+    font-size: 13px;
+  }
+  #pass-description .title { font-weight: 600; color: #E7E9EA; }
+  #pass-description .subtitle { font-size: 12px; color: #1D9BF0; font-style: italic; margin: 2px 0 6px; }
+  #pass-description .body { color: #A0A4A8; line-height: 1.5; }
+
+  #footer {
+    padding: 10px 20px;
+    border-top: 1px solid #2F3336;
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: #71767B;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .leaflet-control-attribution { font-size: 9px !important; }
+  
+  .legend {
+    position: absolute;
+    bottom: 30px;
+    left: 12px;
+    background: rgba(15, 20, 25, 0.9);
+    border: 1px solid #2F3336;
+    border-radius: 8px;
+    padding: 12px;
+    z-index: 1000;
+    font-size: 11px;
+    backdrop-filter: blur(8px);
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; color: #A0A4A8; }
+  .legend-swatch { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }
+  .legend-line { width: 14px; height: 2px; flex-shrink: 0; }
+  .legend-title { font-weight: 600; color: #E7E9EA; margin-bottom: 6px; font-size: 11px; }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <div class="tag">AGRIOS · BOUNDARY LOOP REPORT</div>
+  <h1>Farm Boundary Analysis — Allerton, Iowa</h1>
+  <div class="sub">40.897°N, 93.197°W · ~400 acres · Corn/Soybean · March 23, 2026</div>
+</div>
+
+<div id="controls">
+  <button class="pass-btn active" onclick="setPass(0)">Overview</button>
+  <button class="pass-btn" onclick="setPass(1)">Pass 1: Edges</button>
+  <button class="pass-btn" onclick="setPass(2)">Pass 2: Compounds</button>
+  <button class="pass-btn" onclick="setPass(3)">Pass 3: Priority</button>
+  <button class="pass-btn sensor-btn" onclick="toggleSensors()">📍 Sensors</button>
+</div>
+
+<div id="pass-description">
+  <div class="title" id="pd-title">Overview</div>
+  <div class="subtitle" id="pd-subtitle">Your friend's farm near Allerton, Iowa</div>
+  <div class="body" id="pd-body">~400 acres on dissected till plains. Corn/soybean rotation. The landscape rolls from loess-capped ridgetops down through eroded side slopes to stream channels.</div>
+</div>
+
+<div id="map-container">
+  <div id="map"></div>
+  <div id="info-panel" style="display:none;"></div>
+  <div class="legend" id="legend"></div>
+</div>
+
+<div id="footer">
+  <span>AGRIOS Boundary Scout v0.2 · 3 passes · 8 boundaries · 5 compounds · 2 active</span>
+  <span style="font-style:italic;">Public data only. The field knows things the satellite doesn't. Re-scout: mid-April.</span>
+</div>
+
+<script>
+const CENTER = [40.897, -93.197];
+const map = L.map('map', { zoomControl: true }).setView(CENTER, 15);
+
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+  attribution: 'Imagery: Esri, Maxar, Earthstar Geographics',
+  maxZoom: 19
+}).addTo(map);
+
+// Layer groups for each pass
+const pass1Layers = L.layerGroup();
+const pass2Layers = L.layerGroup();
+const pass3Layers = L.layerGroup();
+const sensorLayers = L.layerGroup();
+
+// ============ PASS 1: SOIL ZONES ============
+
+// Grundy-Haig ridgetop (north/upper part of field)
+const grundy = L.polygon([
+  [40.9015, -93.2040], [40.9020, -93.1980], [40.9015, -93.1920],
+  [40.9005, -93.1895], [40.8990, -93.1900], [40.8980, -93.1935],
+  [40.8975, -93.1975], [40.8980, -93.2020], [40.8990, -93.2045]
+], {
+  color: '#A0B87A', weight: 1.5, fillColor: '#8B9E6B', fillOpacity: 0.3,
+  dashArray: '5,5'
+}).bindTooltip('Grundy-Haig<br><span style="font-size:10px;color:#aaa;">Ridgetop loess, moderate drainage</span>', {className:'', direction:'center', permanent: false});
+
+// Adair side slopes (middle band)
+const adair = L.polygon([
+  [40.8980, -93.2045], [40.8980, -93.2020], [40.8975, -93.1975],
+  [40.8980, -93.1935], [40.8990, -93.1900], [40.8975, -93.1895],
+  [40.8960, -93.1900], [40.8945, -93.1920], [40.8940, -93.1960],
+  [40.8940, -93.2000], [40.8945, -93.2035], [40.8960, -93.2050]
+], {
+  color: '#D4A878', weight: 1.5, fillColor: '#C4956A', fillOpacity: 0.25,
+  dashArray: '5,5'
+}).bindTooltip('Adair<br><span style="font-size:10px;color:#aaa;">Side slopes, clay paleosol</span>', {direction:'center'});
+
+// Lamoni - north facing pocket (SW area)
+const lamoni1 = L.polygon([
+  [40.8955, -93.2040], [40.8960, -93.2010], [40.8950, -93.1990],
+  [40.8940, -93.2000], [40.8935, -93.2025], [40.8942, -93.2045]
+], {
+  color: '#C09060', weight: 1.5, fillColor: '#A67C52', fillOpacity: 0.35,
+  dashArray: '5,5'
+}).bindTooltip('Lamoni<br><span style="font-size:10px;color:#aaa;">N-facing, poorly drained</span>', {direction:'center'});
+
+// Lamoni - another north facing pocket (SE area)  
+const lamoni2 = L.polygon([
+  [40.8955, -93.1940], [40.8960, -93.1920], [40.8950, -93.1905],
+  [40.8940, -93.1915], [40.8938, -93.1935], [40.8945, -93.1945]
+], {
+  color: '#C09060', weight: 1.5, fillColor: '#A67C52', fillOpacity: 0.35,
+  dashArray: '5,5'
+}).bindTooltip('Lamoni<br><span style="font-size:10px;color:#aaa;">N-facing, poorly drained</span>', {direction:'center'});
+
+// Bottomland along drainage
+const bottomland = L.polygon([
+  [40.8935, -93.2025], [40.8940, -93.2000], [40.8940, -93.1960],
+  [40.8938, -93.1935], [40.8940, -93.1915], [40.8935, -93.1900],
+  [40.8925, -93.1895], [40.8920, -93.1910], [40.8918, -93.1945],
+  [40.8920, -93.1985], [40.8922, -93.2010], [40.8925, -93.2030]
+], {
+  color: '#88AAAA', weight: 1.5, fillColor: '#6B8E8E', fillOpacity: 0.3,
+  dashArray: '5,5'
+}).bindTooltip('Bottomland<br><span style="font-size:10px;color:#aaa;">Alluvial, stream channel</span>', {direction:'center'});
+
+// Slope break line
+const slopeBreak = L.polyline([
+  [40.8985, -93.2045], [40.8978, -93.2010], [40.8977, -93.1975],
+  [40.8980, -93.1940], [40.8985, -93.1900]
+], {
+  color: '#FFD700', weight: 2, dashArray: '8,6', opacity: 0.7
+}).bindTooltip('Slope break', {direction:'top', permanent: false});
+
+// Stream channel
+const stream = L.polyline([
+  [40.8930, -93.2035], [40.8928, -93.2010], [40.8925, -93.1980],
+  [40.8922, -93.1955], [40.8920, -93.1930], [40.8918, -93.1900]
+], {
+  color: '#5B8FA8', weight: 3, opacity: 0.7
+}).bindTooltip('Drainage channel', {direction:'bottom'});
+
+// Tree line
+const treeLine = L.polyline([
+  [40.8965, -93.2015], [40.8963, -93.1995], [40.8962, -93.1975],
+  [40.8963, -93.1955], [40.8965, -93.1935]
+], {
+  color: '#2D5016', weight: 5, opacity: 0.7
+}).bindTooltip('Tree line / windbreak', {direction:'top'});
+
+// Aspect labels
+const nFacingLabel = L.marker([40.8948, -93.2030], {
+  icon: L.divIcon({
+    html: '<div style="color:#8BB8D0;font-size:11px;font-weight:600;white-space:nowrap;text-shadow:0 0 4px rgba(0,0,0,0.8);">N-facing ↙</div>',
+    className: '', iconSize: [80, 20]
+  })
+});
+const sFacingLabel = L.marker([40.8955, -93.1910], {
+  icon: L.divIcon({
+    html: '<div style="color:#D0A868;font-size:11px;font-weight:600;white-space:nowrap;text-shadow:0 0 4px rgba(0,0,0,0.8);">S-facing ↗</div>',
+    className: '', iconSize: [80, 20]
+  })
+});
+
+pass1Layers.addLayer(grundy);
+pass1Layers.addLayer(adair);
+pass1Layers.addLayer(lamoni1);
+pass1Layers.addLayer(lamoni2);
+pass1Layers.addLayer(bottomland);
+pass1Layers.addLayer(slopeBreak);
+pass1Layers.addLayer(stream);
+pass1Layers.addLayer(treeLine);
+pass1Layers.addLayer(nFacingLabel);
+pass1Layers.addLayer(sFacingLabel);
+
+// ============ PASS 2: COMPOUND ZONES ============
+
+const compoundData = {
+  northFacing: {
+    label: 'North-Facing Moisture Compound',
+    priority: 'HIGH',
+    color: '#DC2626',
+    desc: 'Lamoni poor drainage + north-facing aspect = last area ready for spring work. Drying slowest right now.',
+    boundaries: 'Soil (Grundy→Lamoni) + Aspect (N-facing)',
+    pass2: 'Neither drainage class nor aspect alone predicts this. The compound creates a zone that behaves differently from either factor — the farm\'s moisture "last out."'
+  },
+  tripleConverge: {
+    label: 'Triple Convergence Zone',
+    priority: 'HIGH',
+    color: '#DC2626',
+    desc: 'Soil + slope + drainage all change within meters. Likely saturated now. Equipment will get stuck here.',
+    boundaries: 'Soil + Topography + Stream channel',
+    pass2: 'Three Pass 1 boundaries collide. Equipment routing, erosion risk, and nutrient transport all concentrate at this one intersection.'
+  },
+  ridgetopOffset: {
+    label: 'Ridgetop-Slope Offset',
+    priority: 'WATCH',
+    color: '#D97706',
+    desc: 'Soil transition and slope break don\'t perfectly align. Terrain says "slope" but soil says "ridgetop" or vice versa.',
+    boundaries: 'Soil (Grundy→Adair) + Slope break',
+    pass2: 'The offset creates unpredictable behavior — water and equipment respond to the soil type they\'re ON, not the slope they\'re ON.'
+  },
+  windbreakAspect: {
+    label: 'Windbreak Microclimate',
+    priority: 'WATCH',
+    color: '#D97706',
+    desc: 'South-facing, wind-protected side of tree line = earliest warming microsite. Opposite side: a week behind in effective growing season.',
+    boundaries: 'Tree line + Aspect boundary',
+    pass2: 'Wind protection compounds with south-facing warmth. Two spots meters apart can differ by a week in soil temperature readiness.'
+  },
+  agrivoltaic: {
+    label: 'Panel Shadow/Soil Compound',
+    priority: 'DORMANT',
+    color: '#9CA3AF',
+    desc: 'If panels were sited on the ridgetop, shadow would cross the Grundy→Adair soil transition. Same shade, different moisture outcomes on each side.',
+    boundaries: 'Hypothetical shadow + Soil transition',
+    pass2: 'Shadow falling on Grundy (silty, moderate drainage) vs Adair (clay, different water-holding) produces asymmetric moisture effects. Invisible without cross-referencing.'
+  }
+};
+
+function makeCompoundZone(center, radiusX, radiusY, key, starCount) {
+  const d = compoundData[key];
+  const points = [];
+  for (let i = 0; i <= 36; i++) {
+    const angle = (i / 36) * 2 * Math.PI;
+    points.push([
+      center[0] + radiusY * Math.sin(angle),
+      center[1] + radiusX * Math.cos(angle)
+    ]);
+  }
+  const zone = L.polygon(points, {
+    color: d.color, weight: 2.5, fillColor: d.color, fillOpacity: 0.12,
+    dashArray: '6,4'
+  });
+  zone.on('click', function() { showCompoundInfo(key); });
+  zone.on('mouseover', function() { this.setStyle({fillOpacity: 0.25}); });
+  zone.on('mouseout', function() { this.setStyle({fillOpacity: 0.12}); });
+  
+  const stars = '★'.repeat(starCount);
+  const label = L.marker(center, {
+    icon: L.divIcon({
+      html: '<div style="color:'+d.color+';font-size:16px;font-weight:700;text-shadow:0 0 6px rgba(0,0,0,0.9);text-align:center;">'+stars+'</div>',
+      className: '', iconSize: [40, 20], iconAnchor: [20, 10]
+    })
+  });
+  
+  pass2Layers.addLayer(zone);
+  pass2Layers.addLayer(label);
+  return zone;
+}
+
+makeCompoundZone([40.8947, -93.2020], 0.003, 0.0012, 'northFacing', 1);
+makeCompoundZone([40.8932, -93.1970], 0.004, 0.001, 'tripleConverge', 3);
+makeCompoundZone([40.8978, -93.1980], 0.004, 0.0008, 'ridgetopOffset', 1);
+makeCompoundZone([40.8963, -93.1975], 0.002, 0.0006, 'windbreakAspect', 1);
+makeCompoundZone([40.8990, -93.1950], 0.003, 0.0009, 'agrivoltaic', 1);
+
+// ============ PASS 3: PRIORITY BADGES ============
+
+function makePriorityBadge(pos, text, color) {
+  return L.marker(pos, {
+    icon: L.divIcon({
+      html: '<div style="background:'+color+';color:white;font-size:10px;font-weight:700;padding:3px 10px;border-radius:12px;white-space:nowrap;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,0.5);">'+text+'</div>',
+      className: '', iconSize: [70, 22], iconAnchor: [35, 28]
+    })
+  });
+}
+
+pass3Layers.addLayer(makePriorityBadge([40.8952, -93.2020], '🔴 HIGH', '#DC2626'));
+pass3Layers.addLayer(makePriorityBadge([40.8937, -93.1970], '🔴 HIGH', '#DC2626'));
+pass3Layers.addLayer(makePriorityBadge([40.8983, -93.1980], '🟡 WATCH', '#D97706'));
+pass3Layers.addLayer(makePriorityBadge([40.8967, -93.1975], '🟡 WATCH', '#D97706'));
+pass3Layers.addLayer(makePriorityBadge([40.8995, -93.1950], '⚪ DORMANT', '#6B7280'));
+
+// ============ SENSORS ============
+
+function makeSensor(pos, num, label) {
+  return L.marker(pos, {
+    icon: L.divIcon({
+      html: '<div style="position:relative;"><div style="background:#2563EB;color:white;width:22px;height:22px;border-radius:50%;border:2px solid white;text-align:center;line-height:20px;font-size:11px;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,0.5);">'+num+'</div><div style="position:absolute;left:28px;top:0;background:rgba(37,99,235,0.9);color:white;font-size:10px;padding:2px 8px;border-radius:4px;white-space:nowrap;">'+label+'</div></div>',
+      className: '', iconSize: [160, 26], iconAnchor: [11, 11]
+    })
+  });
+}
+
+sensorLayers.addLayer(makeSensor([40.8978, -93.1980], '1', 'Drying front monitor'));
+sensorLayers.addLayer(makeSensor([40.8947, -93.2020], '2', 'Worst-case moisture'));
+sensorLayers.addLayer(makeSensor([40.8932, -93.1970], '3', 'Triple convergence'));
+
+// ============ COORDINATE MARKER ============
+
+L.marker(CENTER, {
+  icon: L.divIcon({
+    html: '<div style="width:8px;height:8px;background:#1D9BF0;border:2px solid white;border-radius:50%;box-shadow:0 0 8px rgba(29,155,240,0.5);"></div>',
+    className: '', iconSize: [12, 12], iconAnchor: [6, 6]
+  })
+}).addTo(map).bindTooltip('Plus code location', {direction:'top', offset:[0,-8]});
+
+// ============ CONTROLS ============
+
+let currentPass = 0;
+let sensorsVisible = false;
+
+function setPass(p) {
+  currentPass = p;
+  
+  document.querySelectorAll('.pass-btn:not(.sensor-btn)').forEach((btn, i) => {
+    btn.classList.toggle('active', i === p);
+  });
+
+  map.removeLayer(pass1Layers);
+  map.removeLayer(pass2Layers);
+  map.removeLayer(pass3Layers);
+
+  if (p >= 1) pass1Layers.addTo(map);
+  if (p >= 2) pass2Layers.addTo(map);
+  if (p >= 3) pass3Layers.addTo(map);
+
+  const descs = [
+    { t: 'Overview', s: "Your friend's farm near Allerton, Iowa", b: "~400 acres on dissected till plains. Corn/soybean rotation. Satellite view shows the rolling terrain — ridgetops to stream channels — that creates multiple boundary types across a small area." },
+    { t: 'Pass 1 — The Edges', s: "What's here that doesn't change?", b: "8 stable boundaries mapped: Grundy-Haig loess on ridgetops, Adair clay on side slopes, Lamoni on north-facing pockets, alluvial bottomland along drainage. Plus slope breaks, stream channels, tree lines. These are the bones of the field." },
+    { t: 'Pass 2 — Where Edges Meet', s: "Where do these boundaries collide?", b: "5 compound zones discovered where Pass 1 boundaries intersect. Click any dashed zone to see why the intersection matters more than either boundary alone. ★★★ marks the triple compound." },
+    { t: 'Pass 3 — What Matters Now', s: "March 23, 2026 — Pre-planting window", b: "After record weekend warmth and today's drying winds, two compounds are HIGH priority. The north-facing moisture trap determines the planting timeline. The triple convergence determines equipment routing. Same field in July: completely different priorities." }
+  ];
+  
+  document.getElementById('pd-title').textContent = descs[p].t;
+  document.getElementById('pd-subtitle').textContent = descs[p].s;
+  document.getElementById('pd-body').textContent = descs[p].b;
+  
+  updateLegend(p);
+  
+  if (p < 2) {
+    document.getElementById('info-panel').style.display = 'none';
+  }
+}
+
+function toggleSensors() {
+  sensorsVisible = !sensorsVisible;
+  const btn = document.querySelector('.sensor-btn');
+  btn.classList.toggle('active', sensorsVisible);
+  if (sensorsVisible) {
+    sensorLayers.addTo(map);
+  } else {
+    map.removeLayer(sensorLayers);
+  }
+}
+
+function showCompoundInfo(key) {
+  const d = compoundData[key];
+  const panel = document.getElementById('info-panel');
+  panel.style.display = 'block';
+  panel.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:start;">
+      <div class="priority-tag" style="color:${d.color};">${d.priority} PRIORITY</div>
+      <button onclick="document.getElementById('info-panel').style.display='none'" 
+        style="background:none;border:none;color:#71767B;cursor:pointer;font-size:16px;line-height:1;">✕</button>
+    </div>
+    <h3>${d.label}</h3>
+    <p>${d.desc}</p>
+    <div class="detail">
+      <span style="font-weight:600;color:#8B9E6B;">Boundaries:</span> ${d.boundaries}
+    </div>
+    <div class="pass2-insight">
+      <span style="font-weight:600;">Why Pass 2 matters:</span> ${d.pass2}
+    </div>
+  `;
+}
+
+function updateLegend(pass) {
+  const el = document.getElementById('legend');
+  let html = '<div class="legend-title">Layers</div>';
+  
+  if (pass >= 1) {
+    html += `
+      <div class="legend-item"><div class="legend-swatch" style="background:#8B9E6B;opacity:0.6;"></div> Grundy-Haig (ridgetop)</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:#C4956A;opacity:0.6;"></div> Adair (side slopes)</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:#A67C52;opacity:0.6;"></div> Lamoni (N-facing)</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:#6B8E8E;opacity:0.6;"></div> Bottomland</div>
+      <div class="legend-item"><div class="legend-line" style="background:#FFD700;"></div> Slope break</div>
+      <div class="legend-item"><div class="legend-line" style="background:#5B8FA8;height:3px;"></div> Stream channel</div>
+      <div class="legend-item"><div class="legend-line" style="background:#2D5016;height:4px;"></div> Tree line</div>
+    `;
+  }
+  if (pass >= 2) {
+    html += `
+      <div style="border-top:1px solid #2F3336;margin:6px 0;padding-top:6px;">
+        <div class="legend-item"><span style="color:#DC2626;font-size:13px;">★</span> High priority compound</div>
+        <div class="legend-item"><span style="color:#D97706;font-size:13px;">★</span> Watch compound</div>
+        <div class="legend-item"><span style="color:#9CA3AF;font-size:13px;">★</span> Dormant / hypothetical</div>
+        <div class="legend-item"><span style="color:#DC2626;font-size:13px;">★★★</span> Triple compound</div>
+      </div>
+    `;
+  }
+  if (pass === 0) {
+    html += '<div class="legend-item" style="color:#71767B;">Select a Pass to see boundary layers</div>';
+  }
+  
+  el.innerHTML = html;
+}
+
+// Initialize
+updateLegend(0);
+</script>
+</body>
+</html>
